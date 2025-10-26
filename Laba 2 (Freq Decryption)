@@ -1,0 +1,52 @@
+import string
+
+FREQ = {
+    'A': 8.08, 'B': 1.67, 'C': 3.18, 'D': 3.99, 'E': 12.56,
+    'F': 2.17, 'G': 1.80, 'H': 5.27, 'I': 7.24, 'J': 0.14,
+    'K': 0.63, 'L': 4.04, 'M': 2.60, 'N': 7.38, 'O': 7.47,
+    'P': 1.91, 'Q': 0.09, 'R': 6.42, 'S': 6.59, 'T': 9.15,
+    'U': 2.79, 'V': 1.00, 'W': 1.89, 'X': 0.21, 'Y': 1.65,
+    'Z': 0.07
+}
+
+def shift_text(text, shift):
+    result = []
+    for ch in text:
+        if ch.isalpha():
+            base = ord('A') if ch.isupper() else ord('a')
+            new_char = chr((ord(ch) - base - shift) % 26 + base)
+            result.append(new_char)
+        else:
+            result.append(ch)
+    return ''.join(result)
+
+def frequency_score(text):
+    text = text.upper()
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return float('inf') 
+    total = len(letters)
+
+    freq_text = {ch: letters.count(ch) / total * 100 for ch in string.ascii_uppercase}
+    
+    chi_sq = sum(
+        ((freq_text[ch] - FREQ[ch]) ** 2) / FREQ[ch]
+        for ch in string.ascii_uppercase
+    )
+    return chi_sq
+
+
+ciphertext = input().rstrip()
+
+best_shift = None
+best_score = float('inf')
+best_plaintext = ""
+
+for shift in range(26):
+    candidate = shift_text(ciphertext, shift)
+    score = frequency_score(candidate)
+    if score < best_score:
+        best_score = score
+        best_shift = shift
+        best_plaintext = candidate
+print(best_plaintext)
