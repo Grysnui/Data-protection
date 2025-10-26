@@ -1,0 +1,41 @@
+def caesar_shift(text, start_shift, encode=True):
+    result = []
+    for i, ch in enumerate(text):
+        shift = (start_shift + i) % 26
+        if not encode:
+            shift = -shift
+        new_char = chr((ord(ch) - ord('A') + shift) % 26 + ord('A'))
+        result.append(new_char)
+    return ''.join(result)
+
+def apply_rotor(text, rotor, encode=True):
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    if encode:
+        return ''.join(rotor[alphabet.index(ch)] for ch in text)
+    else:
+        return ''.join(alphabet[rotor.index(ch)] for ch in text)
+
+mode = input().strip()            # ENCODE or DECODE
+start_shift = int(input().strip())
+rotor1 = input().strip()
+rotor2 = input().strip()
+rotor3 = input().strip()
+message = input().strip()
+
+if mode == "ENCODE":
+    # Step 1: Caesar shift
+    step1 = caesar_shift(message, start_shift, encode=True)
+    # Step 2: Pass through rotors
+    step2 = apply_rotor(step1, rotor1, encode=True)
+    step3 = apply_rotor(step2, rotor2, encode=True)
+    step4 = apply_rotor(step3, rotor3, encode=True)
+    print(step4)
+
+if mode == "DECODE":
+    # Step 1: Reverse through rotors
+    step1 = apply_rotor(message, rotor3, encode=False)
+    step2 = apply_rotor(step1, rotor2, encode=False)
+    step3 = apply_rotor(step2, rotor1, encode=False)
+    # Step 2: Reverse Caesar shift
+    step4 = caesar_shift(step3, start_shift, encode=False)
+    print(step4)
