@@ -1,0 +1,12 @@
+def xor_bytes(a, b):
+    return bytes(x ^ y for x, y in zip(a, b))
+
+m1 = bytes.fromhex(input().strip())  # Alice → Bob
+m2 = bytes.fromhex(input().strip())  # Bob → Alice
+m3 = bytes.fromhex(input().strip())  # Alice → Bob (final)
+
+message_bytes = xor_bytes(xor_bytes(m1, m2), m3)
+
+plaintext = message_bytes.decode('ascii')
+
+print(plaintext)
