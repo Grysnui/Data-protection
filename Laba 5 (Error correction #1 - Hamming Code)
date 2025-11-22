@@ -1,0 +1,22 @@
+def encode(text):
+    result = ""
+    for ch in text:
+        # convert to ASCII → 8-bit binary
+        b = format(ord(ch), "08b")
+        # triple each bit
+        result += "".join(bit * 3 for bit in b)
+    return result
+
+def decode(bits):
+        # Step 1 — split into groups of 3 and majority vote each
+        corrected = ""
+        for i in range(0, len(bits), 3):
+            triplet = bits[i:i+3]
+            corrected += "1" if triplet.count("1") > 1 else "0"     
+        # Step 2 — group into bytes and convert to characters
+        text = ""
+        for i in range(0, len(corrected), 8):
+            byte = corrected[i:i+8]
+            text += chr(int(byte, 2))
+        
+        return text
