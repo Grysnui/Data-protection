@@ -1,0 +1,80 @@
+def scanner(matrix):
+    N = 21  # version 1 size
+
+    # --- helper to mark function modules (not data) ---
+    function = [[False] * N for _ in range(N)]
+
+    def mark_finder(x0, y0):
+        # finder 7x7
+        for y in range(y0, y0 + 7):
+            for x in range(x0, x0 + 7):
+                function[y][x] = True
+        for y in range(max(0, y0 - 1), min(N, y0 + 8)):
+            for x in range(max(0, x0 - 1), min(N, x0 + 8)):
+                if not (y0 <= y < y0 + 7 and x0 <= x < x0 + 7):
+                    function[y][x] = True
+
+    mark_finder(0, 0)
+    mark_finder(N - 7, 0)
+    mark_finder(0, N - 7)
+
+    for i in range(N):
+        function[6][i] = True
+        function[i][6] = True
+
+    for i in range(9):
+        function[8][i] = True  # row 8, cols 0..8
+        function[i][8] = True  # col 8, rows 0..8
+        function[8][N - 1 - i] = True  # row 8, near right
+        function[N - 1 - i][8] = True  # col 8, near bottom
+
+    # dark module (version 1 fixed pos)
+    function[N - 8][8] = True
+
+    # --- read data bits in QR zig-zag order (two columns at a time) ---
+    bits = []
+    x = N - 1
+    upward = True
+
+    while x > 0:
+        if x == 6:  # skip vertical timing column
+            x -= 1
+
+        rows = range(N - 1, -1, -1) if upward else range(N)
+        for y in rows:
+            for dx in (0, -1):  # right column then left column of the pair
+                xx = x + dx
+                # skip out-of-range (shouldn't happen) and function modules
+                if 0 <= xx < N and not function[y][xx]:
+                    # unmask for mask 0: mask(x,y) = (x+y)%2 == 0
+                    mask_bit = ((xx + y) % 2) == 0
+                    bit = matrix[y][xx] ^ (1 if mask_bit else 0)
+                    bits.append(bit)
+        upward = not upward
+        x -= 2
+
+    # --- bitstream -> payload extraction ---
+    idx = 0
+
+    def take(n):
+        nonlocal idx
+        val = 0
+        for i in range(n):
+            val = (val << 1) | bits[idx + i]
+        idx += n
+        return val
+
+    # mode indicator (4 bits) - expecting byte mode (0100 == 4)
+    mode = take(4)
+    if mode != 4:
+        return ""  # unsupported mode in these kata tests
+
+    # character count for byte mode in v1 uses 8 bits
+    length = take(8)
+
+    chars = []
+    for _ in range(length):
+        byte = take(8)
+        chars.append(chr(byte))
+
+    return "".join(chars)
