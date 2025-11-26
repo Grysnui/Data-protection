@@ -1,0 +1,102 @@
+using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+
+class AesCtr
+{
+    private readonly byte[] key;
+    private readonly int blockSizeBytes = 16; // AES block size (128 bits)
+    public AesCtr(byte[] key)
+    {
+        if (key == null) throw new ArgumentNullException(nameof(key));
+        if (!(key.Length == 16 || key.Length == 24 || key.Length == 32))
+            throw new ArgumentException("Key must be 16, 24 or 32 bytes (AES-128/192/256).");
+        this.key = key;
+    }
+    public byte[] Encrypt(byte[] Giventext, byte[] nonce)
+    {
+        return ProcessCtr(Giventext, nonce);
+    }
+    public byte[] Decrypt(byte[] Encryptedtext, byte[] nonce)
+    {
+        // CTR is symmetric
+        return ProcessCtr(Encryptedtext, nonce);
+    }
+    private byte[] ProcessCtr(byte[] input, byte[] nonce)
+    {
+        if (nonce == null) throw new ArgumentNullException(nameof(nonce));
+        if (nonce.Length > blockSizeBytes)
+            throw new ArgumentException($"Nonce length must be <= {blockSizeBytes} bytes.");
+
+        byte[] output = new byte[input.Length];
+
+        using (Aes aes = Aes.Create())
+        {
+            aes.Mode = CipherMode.ECB; // use AES block encryption directly
+            aes.Padding = PaddingMode.None;
+            aes.Key = key;
+            using (ICryptoTransform encryptor = aes.CreateEncryptor())
+            {
+                ulong counter = 0UL;
+                int offset = 0;
+                while (offset < input.Length)
+                {
+                    // Build counter block: nonce | counter (big-endian)
+                    byte[] counterBlock = new byte[blockSizeBytes];
+                    // copy nonce first bytes
+                    Buffer.BlockCopy(nonce, 0, counterBlock, 0, nonce.Length);
+                    // place counter in last bytes (big-endian)
+                    int counterBytes = Math.Min(8, blockSizeBytes - nonce.Length); // allow up to 8 bytes for counter
+                    for (int i = 0; i < counterBytes; i++)
+                    {
+                        // fill from the end of block
+                        int pos = blockSizeBytes - 1 - i;
+                        counterBlock[pos] = (byte)((counter >> (8 * i)) & 0xFF);
+                    }
+                    // encrypt counter block to get keystream
+                    byte[] keystream = new byte[blockSizeBytes];
+                    encryptor.TransformBlock(counterBlock, 0, blockSizeBytes, keystream, 0);
+                    int remaining = Math.Min(blockSizeBytes, input.Length - offset);
+                    for (int i = 0; i < remaining; i++)
+                    {
+                        output[offset + i] = (byte)(input[offset + i] ^ keystream[i]);
+                    }
+                    offset += remaining;
+                    counter++; // increment counter (wrap-around behaviour: if large data, overflow allowed)
+                }
+            }
+        }
+        return output;
+    }
+}
+class Program
+{
+    static void Main()
+    {
+        byte[] key = new byte[32] 
+        {
+            0x9f,0xbd,0xe6,0x4f,0xad,0xe1,0xf3,0x9d,0x5e,0x53,0x7f,0xbb,0x92,0x96,0x85,0x10,
+            0x9f,0xbd,0xe6,0x4f,0xad,0xe1,0xf3,0x9d,0x5e,0x53,0x7f,0xbb,0x92,0x96,0x85,0x10
+        };
+        byte[] nonce = new byte[12] 
+        {
+            0xd7,0xc9,0xc5,0xaf,0x7f,0xd1,0xe8,0x9e,0x83,0xbe,0x8c,0xa9
+        };
+        string GivenText = "3D printing is the best, Grysnui'` (06082004)";
+        Console.WriteLine("Given: " + GivenText);
+        var aesCtr = new AesCtr(key);
+        byte[] Encryptedtext = aesCtr.Encrypt(Encoding.UTF8.GetBytes(GivenText), nonce);
+        Console.WriteLine("Encrypted (hex): " + BytesToHex(Encryptedtext));
+        byte[] decrypted = aesCtr.Decrypt(Encryptedtext, nonce);
+        Console.WriteLine("Decrypted: " + Encoding.UTF8.GetString(decrypted));
+        // Quick test: verify equality
+        Console.WriteLine("Roundtrip OK: " + (Encoding.UTF8.GetString(decrypted) == GivenText));
+    }
+    static string BytesToHex(byte[] b)
+    {
+        var sb = new System.Text.StringBuilder(b.Length * 2);
+        foreach (var x in b) sb.AppendFormat("{0:x2}", x);
+        return sb.ToString();
+    }
+}
