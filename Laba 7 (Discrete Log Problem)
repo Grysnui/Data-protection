@@ -1,0 +1,54 @@
+import sys
+import math
+
+def egcd(a, b):
+    if b == 0:
+        return (a, 1, 0)
+    g, x1, y1 = egcd(b, a % b)
+    return (g, y1, x1 - (a // b) * y1)
+
+def modinv(a, m):
+    g, x, _ = egcd(a, m)
+    if g != 1:
+        return None  # inverse doesn't exist
+    return x % m
+
+def discrete_log_bsgs(g, h, p):
+    # trivial
+    if h == 1:
+        return 0
+    m = int(math.isqrt(p)) + 1
+
+    # baby steps: g^j -> j for j = 0..m-1
+    baby = {}
+    cur = 1
+    for j in range(m):
+        if cur not in baby:  # keep lowest j if collisions
+            baby[cur] = j
+        cur = (cur * g) % p
+
+    # factor = g^{-m} mod p
+    gm = pow(g, m, p)
+    inv_gm = modinv(gm, p)
+    if inv_gm is None:
+        return None
+
+    # giant steps: check h * (g^{-m})^i
+    cur = h % p
+    best = None
+    for i in range(m + 1):
+        if cur in baby:
+            candidate = i * m + baby[cur]
+            if best is None or candidate < best:
+                best = candidate
+        cur = (cur * inv_gm) % p
+
+    return best
+
+data = sys.stdin.read().strip().split()
+G, H, Q = map(int, data[:3])
+x = discrete_log_bsgs(G, H, Q)
+if x is None:
+    print(-1)
+else:
+    print(x)
