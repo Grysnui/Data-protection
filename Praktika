@@ -1,0 +1,132 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+
+class Program
+{
+    // ====================================
+    // LFSR – Linear Feedback Shift Register
+    // ====================================
+    public class Lfsr
+    {
+        private int _register;
+        public Lfsr(int seed)
+        {
+            _register = seed & 0xFFFF;
+        }
+        public int Next()
+        {
+            // taps: 16,14,13,11 — класичні для статей
+            int bit = ((_register >> 0) ^ (_register >> 2) ^ (_register >> 3) ^ (_register >> 5)) & 1;
+            _register = (_register >> 1) | (bit << 15);
+            return _register;
+        }
+    }
+    // ====================================
+    // Split image into blocks
+    // ====================================
+    public static List<Image<Rgba32>> SplitIntoBlocks(Image<Rgba32> img, int blocksX, int blocksY)
+    {
+        List<Image<Rgba32>> blocks = new();
+        int blockW = img.Width / blocksX;
+        int blockH = img.Height / blocksY;
+        for (int by = 0; by < blocksY; by++)
+        {
+            for (int bx = 0; bx < blocksX; bx++)
+            {
+                var block = img.Clone(ctx =>
+                    ctx.Crop(new Rectangle(bx * blockW, by * blockH, blockW, blockH))
+                );
+                blocks.Add(block);
+            }
+        }
+        return blocks;
+    }
+    // ====================================
+    // Build permutation table via LFSR
+    // ====================================
+    public static int[] BuildPermutation(int blockCount, int seed)
+    {
+        Lfsr lfsr = new(seed);
+        int[] perm = Enumerable.Range(0, blockCount).ToArray();
+        for (int i = blockCount - 1; i > 0; i--)
+        {
+            int rnd = lfsr.Next();
+            int j = rnd % (i + 1);
+            (perm[i], perm[j]) = (perm[j], perm[i]);
+        }
+        return perm;
+    }
+    // ====================================
+    // Apply permutation (encryption)
+    // ====================================
+    public static List<Image<Rgba32>> ApplyPermutation(List<Image<Rgba32>> blocks, int[] perm)
+    {
+        List<Image<Rgba32>> scrambled = new(blocks.Count);
+        foreach (int p in perm)
+            scrambled.Add(blocks[p]);
+        return scrambled;
+    }
+    // ====================================
+    // Reverse permutation (decryption)
+    // ====================================
+    public static List<Image<Rgba32>> ReversePermutation(List<Image<Rgba32>> scrambled, int[] perm)
+    {
+        Image<Rgba32>[] original = new Image<Rgba32>[perm.Length];
+        for (int i = 0; i < perm.Length; i++)
+            original[perm[i]] = scrambled[i];
+        return original.ToList();
+    }
+    // ====================================
+    // Merge blocks into final image
+    // ====================================
+    public static Image<Rgba32> MergeBlocks(List<Image<Rgba32>> blocks, int blocksX, int blocksY)
+    {
+        int blockW = blocks[0].Width;
+        int blockH = blocks[0].Height;
+        Image<Rgba32> output = new(blockW * blocksX, blockH * blocksY);
+        int index = 0;
+        for (int by = 0; by < blocksY; by++)
+        {
+            for (int bx = 0; bx < blocksX; bx++)
+            {
+                output.Mutate(ctx =>
+                    ctx.DrawImage(blocks[index], new Point(bx * blockW, by * blockH), 1f)
+                );
+                index++;
+            }
+        }
+        return output;
+    }
+    // ====================================
+    // MAIN — Encrypt + Decrypt demo
+    // ====================================
+    static void Main()
+    {
+        string inputPath = "input.jpg";
+        string scrambledPath = "scrambled.jpg";
+        string decryptedPath = "decrypted.jpg";
+        int seed = 44257;     // як у статті
+        int blocksX = 4;      // 4 × 3 = 12 блоків
+        int blocksY = 3;
+        // 1. Load original image
+        Image<Rgba32> img = Image.Load<Rgba32>(inputPath);
+        // 2. Split into blocks
+        var blocks = SplitIntoBlocks(img, blocksX, blocksY);
+        // 3. Generate permutation via LFSR
+        int[] perm = BuildPermutation(blocks.Count, seed);
+        // 4. Scramble blocks (encryption)
+        var scrambledBlocks = ApplyPermutation(blocks, perm);
+        var scrambled = MergeBlocks(scrambledBlocks, blocksX, blocksY);
+        scrambled.Save(scrambledPath);
+        // 5. Reverse permutation (decryption)
+        var restoredBlocks = ReversePermutation(scrambledBlocks, perm);
+        var decrypted = MergeBlocks(restoredBlocks, blocksX, blocksY);
+        decrypted.Save(decryptedPath);
+        Console.WriteLine("Scrambled image saved → " + scrambledPath);
+        Console.WriteLine("Decrypted image saved → " + decryptedPath);
+    }
+}
